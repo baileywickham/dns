@@ -45,7 +45,6 @@ pub struct Question {
 
 #[derive(Debug)]
 pub struct Answer {
-    header: Header,
     name: String,
     ty: String,
     class: String,
@@ -55,15 +54,19 @@ pub struct Answer {
 }
 
 impl Message {
-    pub fn read(data: Vec<u8>) -> Message {
+    pub fn read(mut data: Vec<u8>) -> Message {
         let mut message = Message::new();
-        let (header, data) = Header::read(&data);
-        for _ in 1..header.qdcount {
-            let (q, data) = Question::read(&data);
+        let (header, new_data) = Header::read(&data);
+        data = new_data;
+
+        message.header = header;
+        for _ in 0..message.header.qdcount {
+            let (q, new_data) = Question::read(&data);
+            data = new_data;
             message.questions.push(q);
         }
-        for _ in 1..header.ancount {
-            let (a, _data) = Answer::read(&data);
+        for _ in 0..message.header.ancount {
+            let (a, _) = Answer::read(&data);
             message.answers.push(a);
         }
         message
@@ -75,6 +78,7 @@ impl Message {
             answers: vec![]
         }
     }
+
     pub fn to_vec(&self) -> Vec<u8> {
         let mut v = vec![];
         v.extend(&self.header.to_vec());
@@ -85,6 +89,23 @@ impl Message {
             v.extend(a.to_vec())
         }
         v
+    }
+
+    pub fn build(id: u16, url: &str, ty: &str) -> Message {
+        let mut header = Header::new();
+        header.id = id;
+        header.rd = true;
+        header.qdcount = 1;
+
+        let mut question = Question::new();
+        question.qname = url.parse().unwrap();
+        question.qtype = ty.parse().unwrap();
+        question.qclass = "IN".to_string();
+
+        let mut message = Message::new();
+        message.header = header;
+        message.questions.push(question);
+        message
     }
 }
 
@@ -112,20 +133,6 @@ impl Question {
         vec.extend(class_to_u16(&self.qclass).to_be_bytes());
         vec
     }
-
-    pub fn build(id: u16, url: &str, ty: &str) -> Question {
-        let mut header = Header::new();
-        header.id = id;
-        header.rd = true;
-        header.qdcount = 1;
-
-        let mut question = Question::new();
-        question.qname = url.parse().unwrap();
-        question.qtype = ty.parse().unwrap();
-        question.qclass = "IN".to_string();
-        question
-    }
-
 }
 
 impl Header {
@@ -195,12 +202,10 @@ impl Header {
 
 impl Answer {
     pub fn read(data: &Vec<u8>) -> (Answer, Vec<u8>) {
-        let (header, data) = Header::read(data);
-        let mut c = Cursor::new(&data);
+        let mut c = Cursor::new(data);
         let (name, data) = vec_to_name(&data);
 
         let mut ans = Answer {
-            header,
             name,
             ty: u16_to_ty(c.read_u16::<BigEndian>().unwrap()),
             class: u16_to_class(c.read_u16::<BigEndian>().unwrap()),
@@ -216,7 +221,6 @@ impl Answer {
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut vec = vec!();
-        vec.extend(&self.header.to_vec());
         vec.extend(name_to_vec(&self.name));
         vec.extend(ty_to_u16(&self.ty).to_be_bytes());
         vec.extend(class_to_u16(&self.class).to_be_bytes());
@@ -261,7 +265,8 @@ fn get_u4(data: u16, offset: u16) -> u8 {
 fn u16_to_ty(value: u16) -> String {
     match value {
         0x0001 =>  "A".to_string(),
-        _ => panic!("invalid type")
+        0x0005 => "CNAME".to_string(),
+        _ => panic!("invalid type: {:?}", value)
     }
 
 }

@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::UdpSocket;
-use crate::pkt::{Question, Answer, Message};
+use crate::pkt::{Question, Message};
 
 pub fn init_conn(addr: &str) -> UdpSocket {
     println!("init conn from: {:?}", addr);
@@ -9,12 +9,12 @@ pub fn init_conn(addr: &str) -> UdpSocket {
 }
 
 
-pub fn send_dns_q(q : &Question) -> Message {
+pub fn send_dns_q(data : &Vec<u8>) -> Message {
     let conn = init_conn("0.0.0.0:8080");
     println!("Sending dns request");
-    conn.send_to( &q.to_vec(), &"8.8.8.8:53").expect("unable to send pkt");
+    conn.send_to( data, &"1.1.1.1:53").expect("unable to send pkt");
 
-    let mut buf = [0; 2048];
+    let mut buf = [0; 10000];
     let (amt, _src) = conn.recv_from(&mut buf).expect("idk");
     println!("recv bytes: {:?}", amt);
     let mut file = OpenOptions::new()

@@ -13,8 +13,8 @@ fn main() {
 
 
     write_to_file("request", question.to_vec());
-    let ans = send_dns_q(&question);
-    write_to_file("out", ans.to_vec())
+    let msg = send_dns_q(&question);
+    write_to_file("out", msg.to_vec())
 }
 
 fn write_to_file(filename: &str, v: Vec<u8>) {

@@ -56,28 +56,47 @@ pub struct Answer {
 
 impl Message {
     pub fn read(data: Vec<u8>) -> Message {
-        let (header, c) = Header::read(&data);
+        let mut message = Message::new();
+        let (header, data) = Header::read(&data);
         for _ in 1..header.qdcount {
-            let mut qs = Question::read(c);
-
+            let (q, data) = Question::read(&data);
+            message.questions.push(q);
         }
-
+        for _ in 1..header.ancount {
+            let (a, _data) = Answer::read(&data);
+            message.answers.push(a);
+        }
+        message
+    }
+    pub fn new() -> Message {
         Message {
-            header,
+            header: Header::new(),
             questions: vec![],
             answers: vec![]
         }
-
+    }
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut v = vec![];
+        v.extend(&self.header.to_vec());
+        for q in self.questions.iter() {
+            v.extend(q.to_vec())
+        }
+        for a in self.answers.iter() {
+            v.extend(a.to_vec())
+        }
+        v
     }
 }
 
 impl Question {
-    pub fn read(data: &Vec<u8>) -> (Question, &Vec<u8>) {
-        Question {
-            qname: "".to_string(),
-            qtype: "".to_string(),
-            qclass: "".to_string()
-        }
+    pub fn read(data: &Vec<u8>) -> (Question, Vec<u8>) {
+        let (name, data) = vec_to_name(data);
+        let mut c = Cursor::new(&data);
+        (Question {
+            qname: name,
+            qtype: u16_to_ty(c.read_u16::<BigEndian>().unwrap()),
+            qclass: u16_to_class(c.read_u16::<BigEndian>().unwrap())
+        }, trunc(c, &data))
     }
     pub fn new() -> Question {
         Question {
@@ -88,7 +107,6 @@ impl Question {
     }
     pub fn to_vec(&self) -> Vec<u8> {
         let mut vec: Vec<u8> = Vec::new();
-        vec.extend(self.header.to_vec());
         vec.extend(name_to_vec(&self.qname));
         vec.extend(ty_to_u16(&self.qtype).to_be_bytes());
         vec.extend(class_to_u16(&self.qclass).to_be_bytes());
@@ -111,7 +129,7 @@ impl Question {
 }
 
 impl Header {
-    pub fn read(data: &Vec<u8>) -> (Header, &Vec<u8>) {
+    pub fn read(data: &Vec<u8>) -> (Header, Vec<u8>) {
         let mut c = Cursor::new(data);
         let mut header = Header::new();
         header.id = c.read_u16::<BigEndian>().unwrap();
@@ -121,7 +139,7 @@ impl Header {
         header.nscount = c.read_u16::<BigEndian>().unwrap();
         header.arcount = c.read_u16::<BigEndian>().unwrap();
         header.rcode = 0;
-        (header, &data[c.position() as usize..].to_vec())
+        (header, trunc(c, data))
     }
     fn parse_opts(&mut self, data: u16) {
         self.qr = get_u1(data, _QR);
@@ -176,22 +194,10 @@ impl Header {
 }
 
 impl Answer {
-    pub fn read(mut data: &Vec<u8>) -> (Answer, &Vec<u8>) {
-        let (header, data) = Header::read(&data);
-        let mut c = Cursor::new(data);
-        let mut name = "".to_string();
-        loop  {
-            let size: usize = c.read_u8().unwrap() as usize;
-            if size == 0 {
-                break
-            }
-            if name.len() != 0 {
-                name.push('.');
-            }
-            let mut buf = vec![0u8;size];
-            c.read_exact(&mut buf).unwrap();
-            name.push_str(&String::from_utf8(buf).expect("can't parse to utf8"));
-        }
+    pub fn read(data: &Vec<u8>) -> (Answer, Vec<u8>) {
+        let (header, data) = Header::read(data);
+        let mut c = Cursor::new(&data);
+        let (name, data) = vec_to_name(&data);
 
         let mut ans = Answer {
             header,
@@ -205,7 +211,7 @@ impl Answer {
         let mut buf = vec![0u8; ans.rdlength as usize];
         c.read_exact(&mut buf).unwrap();
         ans.rddata = buf;
-        (ans, &data[c.position() as usize..].to_vec())
+        (ans, trunc(c, &data))
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -286,4 +292,24 @@ fn name_to_vec(value: &str) -> Vec<u8> {
     }
     data.push(0);
     data
+}
+fn vec_to_name(data: &Vec<u8>) -> (String, Vec<u8>) {
+    let mut c = Cursor::new(data);
+    let mut name = "".to_string();
+    loop  {
+        let size: usize = c.read_u8().unwrap() as usize;
+        if size == 0 {
+            break
+        }
+        if name.len() != 0 {
+            name.push('.');
+        }
+        let mut buf = vec![0u8;size];
+        c.read_exact(&mut buf).unwrap();
+        name.push_str(&String::from_utf8(buf).expect("can't parse to utf8"));
+    }
+    (name, trunc(c, data))
+}
+fn trunc(c: Cursor<&Vec<u8>>, data: &Vec<u8>) -> Vec<u8> {
+    data[c.position() as usize..].to_vec()
 }

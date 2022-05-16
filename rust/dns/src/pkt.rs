@@ -1,4 +1,6 @@
 use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{ByteOrder};
+
 use std::io::{Cursor, Read};
 
 const _QR: u16 = 1 << 15;
@@ -56,18 +58,20 @@ pub struct Answer {
 }
 
 impl Message {
-    pub fn read(data: &Vec<u8>) -> Message {
+    pub fn read(mut data: Vec<u8>) -> Message {
         let mut message = Message::new();
-        let (header, data) = Header::read(&data);
-
+        let (header, new_data) = Header::read(data);
+        data = new_data;
         message.header = header;
+
         for _ in 0..message.header.qdcount {
-            let (q, data) = Question::read(&data);
-            //data = new_data;
+            let (q, new_data) = Question::read(data);
+            data = new_data;
             message.questions.push(q);
         }
         for _ in 0..message.header.ancount {
-            let (a, _) = Answer::read(&data);
+            let (a, new_data) = Answer::read(data);
+            data = new_data;
             message.answers.push(a);
         }
         message
@@ -111,14 +115,14 @@ impl Message {
 }
 
 impl Question {
-    pub fn read(mut data: &Vec<u8>) -> (Question, Vec<u8>) {
-        let (name, ndata) = vec_to_name(data);
-        let mut c = Cursor::new(&ndata);
+    pub fn read(data: &mut [u8]) -> (Question, Vec<u8>) {
+        let (name, buf) = vec_to_name(data);
+        let mut c = Cursor::new(&buf);
         (Question {
             qname: name,
             qtype: u16_to_ty(c.read_u16::<BigEndian>().unwrap()),
             qclass: u16_to_class(c.read_u16::<BigEndian>().unwrap())
-        }, trunc(c, &ndata))
+        }, trunc(c, buf))
     }
     pub fn new() -> Question {
         Question {
@@ -137,8 +141,8 @@ impl Question {
 }
 
 impl Header {
-    pub fn read(data: &Vec<u8>) -> (Header, Vec<u8>) {
-        let mut c = Cursor::new(data);
+    pub fn read(data: Vec<u8>) -> (Header, Vec<u8>) {
+        let mut c = Cursor::new(&data);
         let mut header = Header::new();
         header.id = c.read_u16::<BigEndian>().unwrap();
         header.parse_opts(c.read_u16::<BigEndian>().unwrap());
@@ -202,10 +206,9 @@ impl Header {
 }
 
 impl Answer {
-    pub fn read(mut data: &Vec<u8>) -> (Answer, Vec<u8>) {
-        let mut c = Cursor::new(data);
-        let (name, new) = vec_to_name(&data);
-        data = &new;
+    pub fn read(mut data: Vec<u8>) -> (Answer, Vec<u8>) {
+        let mut c = Cursor::new(&data);
+        let (name, remaining) = vec_to_name(data);
 
         let mut ans = Answer {
             name,
@@ -218,9 +221,8 @@ impl Answer {
         let mut buf = vec![0u8; ans.rdlength as usize];
         c.read_exact(&mut buf).unwrap();
         ans.rddata = buf;
-        (ans, trunc(c, &data))
+        (ans, trunc(c, remaining))
     }
-
     pub fn to_vec(&self) -> Vec<u8> {
         let mut vec = vec!();
         vec.extend(name_to_vec(&self.name));
@@ -300,13 +302,16 @@ fn name_to_vec(value: &str) -> Vec<u8> {
     data.push(0);
     data
 }
-fn vec_to_name(data: &Vec<u8>) -> (String, Vec<u8>) {
-    let mut c = Cursor::new(data);
+fn vec_to_name(data: &mut [u8]) -> (String, Vec<u8>) {
+    let mut buf = [0; 4];
+    let mut c = Cursor::new(&data);
     let mut name = String::new();
+    BigEndian::read_u16(&data);
+    c.read_u16::<BigEndian>().unwrap();
     if data[0] & _PTR > 0 {
         let dref = |ptr| (ptr - ((_PTR as u16) << 8)) as usize;
         let next = dref(c.read_u16::<BigEndian>().unwrap());
-        let (part, _) = vec_to_name(&data[next..].to_vec());
+        let (part, _) = vec_to_name(&mut data[next..]);
         name += &part;
     } else {
         loop  {
@@ -324,6 +329,6 @@ fn vec_to_name(data: &Vec<u8>) -> (String, Vec<u8>) {
     }
     (name, trunc(c, data))
 }
-fn trunc(c: Cursor<&Vec<u8>>, data: &Vec<u8>) -> Vec<u8> {
+fn trunc(c: Cursor<&Vec<u8>>, data: Vec<u8>) -> Vec<u8> {
     data[c.position() as usize..].to_vec()
 }

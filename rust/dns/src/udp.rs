@@ -24,7 +24,7 @@ pub fn send_dns_q(data : &Vec<u8>) -> Message {
         .expect("unable to write to file");
 
     file.write_all(&buf[..amt]).expect("unable to write to file");
-    Message::read(&buf[..amt].to_vec())
+    Message::read(buf[..amt].to_vec())
 }
 
 

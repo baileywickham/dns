@@ -302,7 +302,7 @@ fn name_to_vec(value: &str) -> Vec<u8> {
     data.push(0);
     data
 }
-fn vec_to_name(data: &mut [u8]) -> (String, Vec<u8>) {
+fn vec_to_name(data: &mut [u8]) -> (String, [u8]) {
     let mut buf = [0; 4];
     let mut c = Cursor::new(&data);
     let mut name = String::new();

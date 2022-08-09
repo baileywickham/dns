@@ -1,10 +1,15 @@
+extern crate core;
+
 use crate::udp::{send_dns_q};
-use crate::pkt::{Message, Question};
 use std::fs::OpenOptions;
 use std::io::Write;
+use bitvec::bitvec;
+use bitvec::order::Msb0;
+use crate::pkt::message::Message;
+use crate::pkt::Serializable;
 
 pub mod udp;
-mod pkt;
+pub mod pkt;
 
 fn main() {
     let message = Message::build(1337,
@@ -12,12 +17,15 @@ fn main() {
                                        "A");
 
 
-    write_to_file("request", message.to_vec());
-    let rsp = send_dns_q(&message.to_vec());
-    write_to_file("out", rsp.to_vec())
+    let mut bv = bitvec![u8, Msb0;];
+    message.serialize(&mut bv);
+    let vector = bv.into_vec();
+    write_to_file("request", &vector);
+    let rsp = send_dns_q(&vector);
+    //write_to_file("out", rsp.to_vec())
 }
 
-fn write_to_file(filename: &str, v: Vec<u8>) {
+fn write_to_file(filename: &str, v: &Vec<u8>) {
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)

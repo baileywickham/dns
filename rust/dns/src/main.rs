@@ -21,7 +21,7 @@ fn main() {
     message.serialize(&mut bv);
     let vector = bv.into_vec();
     write_to_file("request", &vector);
-    let rsp = send_dns_q(&vector);
+    let m = send_dns_q(&vector);
     //write_to_file("out", rsp.to_vec())
 }
 

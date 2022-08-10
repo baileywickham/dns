@@ -2,7 +2,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::UdpSocket;
 use crate::Message;
-use crate::pkt::header::Header;
 
 
 pub fn init_conn(addr: &str) -> UdpSocket {
@@ -27,9 +26,7 @@ pub fn send_dns_q(data : &Vec<u8>) -> Message {
         .expect("unable to write to file");
 
     file.write_all(&buf[..amt]).expect("unable to write to file");
-    let res = Header::deserialize((&buf, 0));
-    Message::new()
-    //Message::read(buf[..amt].to_vec())
+    Message::deserialize(&buf[..amt])
 }
 
 

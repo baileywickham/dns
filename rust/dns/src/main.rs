@@ -16,7 +16,6 @@ fn main() {
                                        "www.northeastern.edu",
                                        "A");
 
-
     let mut bv = bitvec![u8, Msb0;];
     message.serialize(&mut bv);
     let vector = bv.into_vec();

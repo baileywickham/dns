@@ -69,9 +69,7 @@ pub fn parse_name<'a>(mut data: (&'a [u8], usize), raw_data: &[u8]) -> IResult<N
             if size == 0 {
                 break;
             }
-            if name.len() != 0 {
-                name.push('.');
-            }
+            name.push('.');
 
             let (rem, buf) = take_bytes(data, size as usize)?;
             data = rem;

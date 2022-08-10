@@ -54,6 +54,7 @@ pub fn take_bytes(data: NBitSlice, bytes: usize) -> IResult<NBitSlice, Vec<u8>> 
 pub fn parse_name<'a>(mut data: (&'a [u8], usize), raw_data: &[u8]) -> IResult<NBitSlice<'a>, String> {
     let mut name = String::new();
     loop {
+        // A label can end with a ptr, recheck the ptr math every loop
         let (_, first_byte): (NBitSlice, u8) = peek(take(8u8))(data)?;
         if first_byte & PTR_OFFSET > 0 {
             let (rem, ptr) = take_u16(data).unwrap();
@@ -79,6 +80,7 @@ pub fn parse_name<'a>(mut data: (&'a [u8], usize), raw_data: &[u8]) -> IResult<N
     }
     Ok((data, name))
 }
+
 
 fn get_deref_ptr(ptr: u16) -> usize {
     (ptr - ((PTR_OFFSET as u16) << 8)) as usize

@@ -22,6 +22,7 @@ fn main() {
     let vector = bv.into_vec();
     write_to_file("request", &vector);
     let m = send_dns_q(&vector);
+    println!("{}", m);
     //write_to_file("out", rsp.to_vec())
 }
 
